@@ -4,6 +4,7 @@ export { RegisterScreen } from './RegisterScreen';
 export { OtpScreen } from './OtpScreen';
 export { HomeScreen } from './HomeScreen';
 export { ChatScreen } from './ChatScreen';
+export { InquiriesScreen } from './InquiriesScreen';
 export { ComplaintsScreen } from './ComplaintsScreen';
 export { CreateComplaintScreen } from './CreateComplaintScreen';
 export { ComplaintDetailScreen } from './ComplaintDetailScreen';

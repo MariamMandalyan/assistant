@@ -8,8 +8,9 @@ export type AuthStackParamList = {
 export type MainStackParamList = {
   Home: undefined;
   Chat: undefined;
+  Inquiries: undefined;
   Complaints: undefined;
   CreateComplaint: undefined;
-  ComplaintDetail: { complaintId: string };
+  ComplaintDetail: { complaintId: string; kind?: 'complaint' | 'inquiry' };
   Profile: undefined;
 };

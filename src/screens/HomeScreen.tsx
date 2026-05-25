@@ -39,15 +39,21 @@ export function HomeScreen({ navigation }: Props) {
         />
         <SelectionCard
           emoji="📋"
-          title={ru.home.complaints}
-          subtitle={ru.home.complaintsSub}
-          onPress={() => navigation.navigate('Complaints')}
+          title={ru.home.inquiries}
+          subtitle={ru.home.inquiriesSub}
+          onPress={() => navigation.navigate('Inquiries')}
         />
         <SelectionCard
           emoji="📷"
           title={ru.home.newComplaint}
           subtitle={ru.home.newComplaintSub}
           onPress={() => navigation.navigate('CreateComplaint')}
+        />
+        <SelectionCard
+          emoji="📁"
+          title={ru.home.complaints}
+          subtitle={ru.home.complaintsSub}
+          onPress={() => navigation.navigate('Complaints')}
         />
         <SelectionCard
           icon={<AppIcon icon={UserIcon} size={22} />}

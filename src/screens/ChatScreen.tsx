@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,9 +14,10 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { AddImageIcon, SendIcon } from '../assets/icons';
 import { AppIcon } from '../components/AppIcon';
+import { ChatSendCard } from '../components/ChatSendCard';
 import { ChatVoiceButton } from '../components/ChatVoiceButton';
 import { citizenApi } from '../api/citizenApi';
-import type { ChatMessage, ChatProposal, Department } from '../api/types';
+import type { ChatMessage, ChatProposal } from '../api/types';
 import type { ComplaintImage } from '../types/complaint';
 import { ImageAttachments } from '../components/ImageAttachments';
 import { MessageBubble } from '../components/MessageBubble';
@@ -51,6 +51,7 @@ function findPendingProposal(messages: ChatMessage[]): ChatProposal | null {
         formulatedDescription: meta.formulatedDescription ?? '',
         departmentId: meta.departmentId ?? '',
         departmentName: meta.departmentName ?? '',
+        ticketKind: meta.ticketKind === 'complaint' ? 'complaint' : 'inquiry',
         suggestedDepartmentCode: meta.suggestedDepartmentCode ?? null,
         proposalMessageId: m.id,
       };
@@ -61,8 +62,6 @@ function findPendingProposal(messages: ChatMessage[]): ChatProposal | null {
 
 export function ChatScreen({ navigation }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [pendingProposal, setPendingProposal] = useState<ChatProposal | null>(
     null,
   );
@@ -76,23 +75,11 @@ export function ChatScreen({ navigation }: Props) {
 
   const showSend = input.trim().length > 0 && !recording;
 
-  const selectedDept = useMemo(
-    () => departments.find((d) => d.id === selectedDeptId) ?? null,
-    [departments, selectedDeptId],
-  );
-
   const load = useCallback(async () => {
     try {
-      const [chatData, depts] = await Promise.all([
-        citizenApi.chatMessages(),
-        citizenApi.departments(),
-      ]);
+      const chatData = await citizenApi.chatMessages();
       setMessages(chatData.messages);
-      setDepartments(depts);
       setPendingProposal(findPendingProposal(chatData.messages));
-      if (depts.length === 1) {
-        setSelectedDeptId((prev) => prev ?? depts[0].id);
-      }
     } catch (e) {
       alert(ru.common.error, getApiErrorMessage(e, ru.chat.loadError));
     } finally {
@@ -109,10 +96,6 @@ export function ChatScreen({ navigation }: Props) {
     const imagesToSend = [...pendingImages];
     if (!text && imagesToSend.length === 0) return;
     if (sending || confirming) return;
-    if (!selectedDeptId) {
-      alert(ru.common.error, ru.chat.selectService);
-      return;
-    }
     if (!text && imagesToSend.length > 0) {
       text = ru.chat.defaultTextWithPhotos;
     }
@@ -126,11 +109,7 @@ export function ChatScreen({ navigation }: Props) {
       id: tempId,
       role: 'user',
       content: fromVoice ? `${ru.chat.voiceSentPrefix}${text}` : text,
-      metadata: {
-        departmentId: selectedDeptId,
-        departmentName: selectedDept?.name,
-        source: fromVoice ? 'voice' : 'text',
-      },
+      metadata: { source: fromVoice ? 'voice' : 'text' },
       attachments: imagesToSend.map((img) => ({
         id: img.id,
         fileName: img.fileName ?? 'photo.jpg',
@@ -151,7 +130,6 @@ export function ChatScreen({ navigation }: Props) {
 
     try {
       const data = await citizenApi.sendChat(
-        selectedDeptId,
         text,
         fromVoice ? [] : imagesToSend,
       );
@@ -161,11 +139,6 @@ export function ChatScreen({ navigation }: Props) {
       });
       if (data.proposal.canConfirm) {
         setPendingProposal(data.proposal);
-      } else if (data.proposal.suggestedDepartmentCode) {
-        const suggested = departments.find(
-          (d) => d.code === data.proposal.suggestedDepartmentCode,
-        );
-        if (suggested) setSelectedDeptId(suggested.id);
       }
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e) {
@@ -210,10 +183,6 @@ export function ChatScreen({ navigation }: Props) {
 
   const toggleVoice = async () => {
     if (sending || confirming || pendingProposal) return;
-    if (!selectedDeptId) {
-      alert(ru.common.error, ru.chat.selectService);
-      return;
-    }
     if (!recording) {
       await start();
       return;
@@ -245,15 +214,22 @@ export function ChatScreen({ navigation }: Props) {
         return [...updated, data.assistantMessage];
       });
       setPendingProposal(null);
+      const isComplaint = pendingProposal.ticketKind === 'complaint';
       alert(
-        ru.chat.sentToService,
-        `№ ${data.ticket.referenceCode ?? ''} — ${data.ticket.department?.name ?? pendingProposal.departmentName}`,
+        isComplaint ? ru.chat.sentComplaintTitle : ru.chat.sentToService,
+        ru.chat.sentToServiceBody(
+          data.ticket.referenceCode ?? '—',
+          data.ticket.department?.name ?? pendingProposal.departmentName,
+          isComplaint,
+        ),
         [
-          { text: ru.common.ok },
           {
-            text: ru.nav.complaints,
-            onPress: () => navigation.navigate('Complaints'),
+            text: isComplaint ? ru.nav.complaints : ru.nav.inquiries,
+            preferred: true,
+            onPress: () =>
+              navigation.navigate(isComplaint ? 'Complaints' : 'Inquiries'),
           },
+          { text: ru.common.ok, style: 'cancel' },
         ],
       );
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -286,34 +262,6 @@ export function ChatScreen({ navigation }: Props) {
           />
         ) : (
           <>
-            <View style={styles.serviceBlock}>
-              <Text style={styles.serviceLabel}>{ru.chat.selectService}</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.serviceScroll}>
-                {departments.map((d) => (
-                  <Pressable
-                    key={d.id}
-                    onPress={() => setSelectedDeptId(d.id)}
-                    style={[
-                      styles.serviceChip,
-                      selectedDeptId === d.id && styles.serviceChipActive,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.serviceChipText,
-                        selectedDeptId === d.id && styles.serviceChipTextActive,
-                      ]}
-                      numberOfLines={1}>
-                      {d.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <Text style={styles.serviceHint}>{ru.chat.selectServiceHint}</Text>
-            </View>
-
             <FlatList
               ref={listRef}
               data={messages}
@@ -327,20 +275,14 @@ export function ChatScreen({ navigation }: Props) {
 
             {pendingProposal?.canConfirm ? (
               <View style={styles.proposalCard}>
-                <Text style={styles.proposalTitle}>{ru.chat.proposalTitle}</Text>
-                <Text style={styles.proposalMeta}>
-                  {ru.chat.serviceLabel}: {pendingProposal.departmentName}
-                </Text>
-                <Text style={styles.proposalLabel}>
-                  {ru.chat.formulatedLabel}
-                </Text>
-                <Text style={styles.proposalSubject}>
-                  {pendingProposal.formulatedSubject}
-                </Text>
-                <Text style={styles.proposalBody}>
-                  {pendingProposal.formulatedDescription}
-                </Text>
-                <View style={styles.proposalActions}>
+                <ChatSendCard
+                  variant="proposal"
+                  departmentName={pendingProposal.departmentName}
+                  ticketKind={pendingProposal.ticketKind}
+                  formulatedSubject={pendingProposal.formulatedSubject}
+                  formulatedDescription={pendingProposal.formulatedDescription}
+                />
+                <View style={[styles.proposalActions, styles.proposalActionsSpaced]}>
                   <Pressable
                     onPress={cancelProposal}
                     style={styles.proposalBtnSecondary}
@@ -360,7 +302,9 @@ export function ChatScreen({ navigation }: Props) {
                       <ActivityIndicator color={colors.buttonPrimaryText} />
                     ) : (
                       <Text style={styles.proposalBtnPrimaryText}>
-                        {ru.chat.confirmSend}
+                        {pendingProposal.ticketKind === 'complaint'
+                          ? ru.chat.confirmSendComplaint
+                          : ru.chat.confirmSendInquiry}
                       </Text>
                     )}
                   </Pressable>
@@ -408,11 +352,7 @@ export function ChatScreen({ navigation }: Props) {
               style={styles.input}
               value={input}
               onChangeText={setInput}
-              placeholder={
-                selectedDept
-                  ? ru.chat.placeholder
-                  : ru.chat.placeholderNoService
-              }
+              placeholder={ru.chat.placeholder}
               placeholderTextColor={colors.textMuted}
               multiline
               maxLength={2000}
@@ -460,39 +400,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   headerPad: { paddingHorizontal: spacing.screen },
   loader: { flex: 1 },
-  serviceBlock: {
-    paddingHorizontal: spacing.screen,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceBorder,
-  },
-  serviceLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  serviceScroll: { gap: spacing.xs, paddingBottom: spacing.xs },
-  serviceChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxWidth: 200,
-  },
-  serviceChipActive: {
-    borderColor: colors.borderActive,
-    backgroundColor: colors.primaryMuted,
-  },
-  serviceChipText: { fontSize: fontSize.base, color: colors.textSecondary },
-  serviceChipTextActive: { color: colors.primary, fontWeight: '600' },
-  serviceHint: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
   list: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, flexGrow: 1 },
   proposalCard: {
     marginHorizontal: spacing.screen,
@@ -509,15 +416,11 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginBottom: spacing.xs,
   },
-  proposalMeta: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
   proposalLabel: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginBottom: 4,
+    marginTop: spacing.sm,
   },
   proposalSubject: {
     fontSize: fontSize.lg,
@@ -532,6 +435,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   proposalActions: { flexDirection: 'row', gap: spacing.md },
+  proposalActionsSpaced: { marginTop: spacing.md },
   proposalBtnSecondary: {
     flex: 1,
     minHeight: control.minHeight,

@@ -1,4 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { ChatContextCard } from './ChatContextCard';
+import { ChatSendCard } from './ChatSendCard';
 import { ChatMessageImages } from './ChatMessageImages';
 import { colors } from '../theme/colors';
 import { radius, spacing } from '../theme/spacing';
@@ -11,6 +13,61 @@ type Props = { message: ChatMessage };
 export function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user';
   const isStaff = message.role === 'staff';
+  const meta = message.metadata;
+  const ticketKind = meta?.ticketKind ?? 'inquiry';
+
+  if (meta?.type === 'ticket_created') {
+    return (
+      <View style={styles.row}>
+        <View style={[styles.bubble, styles.bubbleAssistant, styles.cardBubble]}>
+          <ChatSendCard
+            variant="sent"
+            departmentName={meta.departmentName}
+            referenceCode={meta.referenceCode}
+            ticketKind={ticketKind}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (
+    meta?.type === 'proposal' &&
+    meta.status === 'confirmed' &&
+    !meta.confirmed
+  ) {
+    return (
+      <View style={styles.row}>
+        <View style={[styles.bubble, styles.bubbleAssistant, styles.cardBubble]}>
+          <ChatSendCard
+            variant="proposal"
+            departmentName={meta.departmentName}
+            ticketKind={ticketKind}
+            formulatedSubject={meta.formulatedSubject}
+            formulatedDescription={meta.formulatedDescription}
+            hint={message.content?.trim() || undefined}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (meta?.type === 'proposal' && meta.status === 'wrong_service') {
+    return (
+      <View style={styles.row}>
+        <View style={[styles.bubble, styles.bubbleAssistant, styles.cardBubble]}>
+          <ChatSendCard
+            variant="redirect"
+            departmentName={meta.departmentName}
+            ticketKind={ticketKind}
+            hint={message.content?.trim() || ru.chat.wrongServiceHint}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const showUserContextCard = isUser && meta?.departmentName;
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
@@ -30,7 +87,7 @@ export function MessageBubble({ message }: Props) {
             alignEnd={isUser}
           />
         ) : null}
-        {message.content ? (
+        {message.content && !showUserContextCard ? (
           <Text
             style={[
               styles.text,
@@ -39,6 +96,19 @@ export function MessageBubble({ message }: Props) {
             ]}>
             {message.content.replace(/\*\*/g, '')}
           </Text>
+        ) : null}
+        {showUserContextCard ? (
+          <>
+            {message.content ? (
+              <Text style={[styles.text, styles.textUser, styles.textAfterPhotos]}>
+                {message.content.replace(/\*\*/g, '')}
+              </Text>
+            ) : null}
+            <ChatContextCard
+              departmentName={meta?.departmentName}
+              ticketKind={ticketKind}
+            />
+          </>
         ) : null}
       </View>
     </View>
@@ -53,6 +123,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  cardBubble: {
+    maxWidth: '92%',
+    paddingVertical: spacing.md,
   },
   bubbleUser: {
     backgroundColor: colors.userBubble,

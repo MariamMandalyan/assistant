@@ -41,6 +41,7 @@ export interface ChatMessageMetadata {
   confirmed?: boolean;
   ticketId?: string;
   referenceCode?: string;
+  ticketKind?: 'inquiry' | 'complaint';
   proposalMessageId?: string;
   escalateSuggested?: boolean;
 }
@@ -61,6 +62,7 @@ export interface ChatProposal {
   formulatedDescription: string;
   departmentId: string;
   departmentName: string;
+  ticketKind: 'inquiry' | 'complaint';
   suggestedDepartmentCode: string | null;
   proposalMessageId: string;
 }

@@ -6,6 +6,14 @@ export type ComplaintStatus =
   | 'resolved'
   | 'closed';
 
+export type TicketMessage = {
+  id: string;
+  content: string;
+  createdAt: string;
+  authorType: 'staff' | 'citizen';
+  authorName?: string | null;
+};
+
 export type ComplaintImage = {
   id: string;
   uri: string;
@@ -25,7 +33,14 @@ export type Complaint = {
   /** When list loaded without full image URLs */
   imageCount?: number;
   createdAt: string;
+  /** Set when created via AI chat — обращение, not a formal complaint */
+  conversationId?: string | null;
+  messages?: TicketMessage[];
 };
+
+export function isInquiry(ticket: Complaint): boolean {
+  return !!ticket.conversationId;
+}
 
 export type NewComplaintInput = {
   subject: string;

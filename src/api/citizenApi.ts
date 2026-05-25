@@ -29,6 +29,7 @@ type ChatProposalRaw = {
   formulatedDescription: string;
   departmentId: string;
   departmentName: string;
+  ticketKind?: 'inquiry' | 'complaint';
   suggestedDepartmentCode: string | null;
   proposalMessageId: string;
 };
@@ -63,9 +64,18 @@ type TicketRaw = {
   status: string;
   priority: string;
   referenceCode: string | null;
+  conversationId?: string | null;
   createdAt: string;
   department?: { id: string; code: string; name: string } | null;
-  messages?: { id: string; content: string; createdAt: string }[];
+  messages?: {
+    id: string;
+    content: string;
+    createdAt: string;
+    authorType?: 'staff' | 'citizen';
+    authorUserId?: string | null;
+    authorCitizenId?: string | null;
+    authorName?: string | null;
+  }[];
   attachmentCount?: number;
   attachments?: TicketAttachmentRaw[];
 };
@@ -90,6 +100,17 @@ function mapAttachments(
   }));
 }
 
+function resolveMessageAuthorType(m: {
+  authorType?: 'staff' | 'citizen';
+  authorUserId?: string | null;
+  authorCitizenId?: string | null;
+}): 'staff' | 'citizen' {
+  if (m.authorType) return m.authorType;
+  if (m.authorUserId) return 'staff';
+  if (m.authorCitizenId) return 'citizen';
+  return 'staff';
+}
+
 function mapTicketToComplaint(t: TicketRaw): Complaint {
   const images = mapAttachments(t.id, t.attachments);
   return {
@@ -101,6 +122,17 @@ function mapTicketToComplaint(t: TicketRaw): Complaint {
     referenceCode: t.referenceCode ?? '',
     images,
     imageCount: t.attachmentCount ?? images.length,
+    conversationId: t.conversationId ?? null,
+    messages: (t.messages ?? []).map((m) => ({
+      id: m.id,
+      content: m.content,
+      createdAt:
+        typeof m.createdAt === 'string'
+          ? m.createdAt
+          : new Date(m.createdAt).toISOString(),
+      authorType: resolveMessageAuthorType(m),
+      authorName: m.authorName ?? null,
+    })),
     createdAt:
       typeof t.createdAt === 'string'
         ? t.createdAt
@@ -260,13 +292,16 @@ export const citizenApi = {
   },
 
   async sendChat(
-    departmentId: string,
     content: string,
     images: ComplaintImage[] = [],
+    departmentId?: string,
   ) {
     const data = await apiRequest<SendChatResponse>('/citizen/chat/messages', {
       method: 'POST',
-      body: { departmentId, content },
+      body: {
+        content,
+        ...(departmentId ? { departmentId } : {}),
+      },
       auth: true,
     });
     const userMessage = mapChatMessage(data.userMessage);
@@ -305,9 +340,19 @@ export const citizenApi = {
   ticketAttachmentFileUrl,
   chatAttachmentFileUrl,
 
-  async complaints(): Promise<Complaint[]> {
+  async listTickets(): Promise<Complaint[]> {
     const data = await apiRequest<TicketRaw[]>('/citizen/tickets', { auth: true });
     return data.map(mapTicketToComplaint);
+  },
+
+  async complaints(): Promise<Complaint[]> {
+    const all = await this.listTickets();
+    return all.filter((t) => !t.conversationId);
+  },
+
+  async inquiries(): Promise<Complaint[]> {
+    const all = await this.listTickets();
+    return all.filter((t) => !!t.conversationId);
   },
 
   async complaint(id: string): Promise<Complaint> {
@@ -367,6 +412,7 @@ function mapProposal(p: ChatProposalRaw): ChatProposal {
     formulatedDescription: p.formulatedDescription,
     departmentId: p.departmentId,
     departmentName: p.departmentName,
+    ticketKind: p.ticketKind === 'complaint' ? 'complaint' : 'inquiry',
     suggestedDepartmentCode: p.suggestedDepartmentCode,
     proposalMessageId: p.proposalMessageId,
   };

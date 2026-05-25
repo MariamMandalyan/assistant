@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button } from '../components/Button';
 import { SelectionCard } from '../components/SelectionCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenLayout } from '../components/ScreenLayout';
@@ -22,23 +21,23 @@ import { fontSize } from '../theme/typography';
 import { ru } from '../i18n';
 import type { MainStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'Complaints'>;
+type Props = NativeStackScreenProps<MainStackParamList, 'Inquiries'>;
 
-export function ComplaintsScreen({ navigation }: Props) {
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
+export function InquiriesScreen({ navigation }: Props) {
+  const [inquiries, setInquiries] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await complaintsStore.list();
-    setComplaints(data);
+    const data = await complaintsStore.listInquiries();
+    setInquiries(data);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       load()
-        .catch(() => alert(ru.common.error, ru.complaints.loadError))
+        .catch(() => alert(ru.common.error, ru.inquiries.loadError))
         .finally(() => setLoading(false));
     }, [load]),
   );
@@ -50,13 +49,8 @@ export function ComplaintsScreen({ navigation }: Props) {
     <ScreenLayout onBack={() => navigation.goBack()}>
       <View style={styles.header}>
         <ScreenHeader
-          title={ru.nav.complaints}
-          subtitle={ru.complaints.listSubtitle}
-        />
-        <Button
-          label={ru.complaints.newBtn}
-          onPress={() => navigation.navigate('CreateComplaint')}
-          style={styles.addBtn}
+          title={ru.nav.inquiries}
+          subtitle={ru.inquiries.listSubtitle}
         />
       </View>
       {loading ? (
@@ -67,7 +61,7 @@ export function ComplaintsScreen({ navigation }: Props) {
         />
       ) : (
         <FlatList
-          data={complaints}
+          data={inquiries}
           keyExtractor={(c) => c.id}
           contentContainerStyle={styles.list}
           refreshControl={
@@ -85,21 +79,19 @@ export function ComplaintsScreen({ navigation }: Props) {
             />
           }
           ListEmptyComponent={
-            <Text style={styles.empty}>{ru.complaints.empty}</Text>
+            <Text style={styles.empty}>{ru.inquiries.empty}</Text>
           }
           renderItem={({ item }) => (
             <SelectionCard
               title={item.subject}
               subtitle={`${item.referenceCode} · ${statusLabel(item.status)}${
-                (item.imageCount ?? item.images.length) > 0
-                  ? ` · ${ru.complaints.photoCount(item.imageCount ?? item.images.length)}`
-                  : ''
+                item.departmentName ? ` · ${item.departmentName}` : ''
               }`}
-              emoji="📷"
+              emoji="💬"
               onPress={() =>
                 navigation.navigate('ComplaintDetail', {
                   complaintId: item.id,
-                  kind: 'complaint',
+                  kind: 'inquiry',
                 })
               }
             />
@@ -115,7 +107,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screen,
     paddingBottom: spacing.sm,
   },
-  addBtn: { marginTop: spacing.sm },
   loader: { flex: 1 },
   list: {
     paddingHorizontal: spacing.screen,

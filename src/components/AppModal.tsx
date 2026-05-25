@@ -4,7 +4,6 @@ import {
   StyleSheet,
   Text,
   View,
-  type ViewStyle,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { control, radius, spacing } from '../theme/spacing';
@@ -19,6 +18,22 @@ type Props = {
   onButtonPress: (button: AlertButton) => void;
 };
 
+function isPrimaryButton(button: AlertButton, index: number, buttons: AlertButton[]): boolean {
+  if (button.style === 'cancel' || button.style === 'destructive') return false;
+  if (button.preferred) return true;
+  if (buttons.some((b) => b.preferred)) return false;
+  return index === buttons.length - 1;
+}
+
+function sortButtonsForDisplay(buttons: AlertButton[]): AlertButton[] {
+  if (buttons.length <= 1) return buttons;
+  const preferredBtn =
+    buttons.find((b) => b.preferred) ??
+    [...buttons].reverse().find((b) => b.style !== 'cancel' && b.style !== 'destructive') ??
+    buttons[buttons.length - 1];
+  return [preferredBtn, ...buttons.filter((b) => b !== preferredBtn)];
+}
+
 export function AppModal({
   visible,
   title,
@@ -27,6 +42,7 @@ export function AppModal({
   onButtonPress,
 }: Props) {
   const isError = title.toLowerCase().includes('ошибка') || title === 'Error';
+  const displayButtons = sortButtonsForDisplay(buttons);
 
   return (
     <Modal
@@ -42,23 +58,18 @@ export function AppModal({
         <View style={styles.card}>
           <Text style={[styles.title, isError && styles.titleError]}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
-          <View
-            style={[
-              styles.actions,
-              buttons.length > 1 && styles.actionsRow,
-            ]}>
-            {buttons.map((btn, index) => (
-              <AlertModalButton
-                key={`${btn.text}-${index}`}
-                button={btn}
-                primary={
-                  buttons.length === 1 ||
-                  index === buttons.length - 1
-                }
-                row={buttons.length > 1}
-                onPress={() => onButtonPress(btn)}
-              />
-            ))}
+          <View style={styles.actions}>
+            {displayButtons.map((btn, index) => {
+              const originalIndex = buttons.indexOf(btn);
+              return (
+                <AlertModalButton
+                  key={`${btn.text}-${originalIndex}`}
+                  button={btn}
+                  primary={isPrimaryButton(btn, originalIndex, buttons)}
+                  onPress={() => onButtonPress(btn)}
+                />
+              );
+            })}
           </View>
         </View>
       </View>
@@ -69,34 +80,34 @@ export function AppModal({
 function AlertModalButton({
   button,
   primary,
-  row,
   onPress,
 }: {
   button: AlertButton;
   primary: boolean;
-  row: boolean;
   onPress: () => void;
 }) {
   const destructive = button.style === 'destructive';
   const cancel = button.style === 'cancel';
-  const usePrimary = primary && !destructive && !cancel;
+  const filled = primary && !destructive;
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.btn,
-        row && styles.btnRow,
-        usePrimary && styles.btnPrimary,
+        filled && styles.btnPrimary,
         cancel && styles.btnSecondary,
         destructive && styles.btnDestructive,
-        !usePrimary && !cancel && !destructive && styles.btnSecondary,
+        !filled && !cancel && !destructive && styles.btnSecondary,
         pressed && styles.btnPressed,
       ]}>
       <Text
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
         style={[
           styles.btnText,
-          usePrimary && styles.btnTextPrimary,
+          filled && styles.btnTextPrimary,
           destructive && styles.btnTextDestructive,
         ]}>
         {button.text}
@@ -142,28 +153,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   actions: {
-    gap: spacing.sm,
-  },
-  actionsRow: {
-    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
   },
   btn: {
-    minHeight: control.minHeight,
-    borderRadius: radius.pill,
+    width: '100%',
+    minHeight: 50,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-  },
-  btnRow: {
-    flex: 1,
+    paddingVertical: spacing.md,
   },
   btnPrimary: {
-    backgroundColor: colors.buttonPrimaryBg,
+    backgroundColor: colors.primary,
   },
   btnSecondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderLight,
   },
   btnDestructive: {
     backgroundColor: 'transparent',
@@ -171,15 +179,16 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
   },
   btnPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
   },
   btnText: {
     fontSize: fontSize.lg,
     fontWeight: '600',
     color: colors.text,
+    textAlign: 'center',
   },
   btnTextPrimary: {
-    color: colors.buttonPrimaryText,
+    color: '#FFFFFF',
   },
   btnTextDestructive: {
     color: colors.danger,

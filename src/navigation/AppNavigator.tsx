@@ -13,6 +13,7 @@ import {
   OtpScreen,
   HomeScreen,
   ChatScreen,
+  InquiriesScreen,
   ComplaintsScreen,
   CreateComplaintScreen,
   ComplaintDetailScreen,
@@ -45,6 +46,7 @@ function MainNavigator() {
     <MainStack.Navigator screenOptions={screenOptions}>
       <MainStack.Screen name="Home" component={HomeScreen} />
       <MainStack.Screen name="Chat" component={ChatScreen} />
+      <MainStack.Screen name="Inquiries" component={InquiriesScreen} />
       <MainStack.Screen name="Complaints" component={ComplaintsScreen} />
       <MainStack.Screen
         name="CreateComplaint"
